@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zeichenfläche</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #ffffff;
+    }
+
+    #app {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+      height: 100%;
+    }
+
+    #toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 7px;
+      background: #f3f3f3;
+      border-bottom: 1px solid #dddddd;
+    }
+
+    button, select, input {
+      font-family: inherit;
+      font-size: 14px;
+    }
+
+    button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid #bbbbbb;
+      border-radius: 5px;
+      background: #ffffff;
+      color: #222222;
+      cursor: pointer;
+      touch-action: manipulation;
+    }
+
+    #submit {
+      background: #245c9c;
+      border-color: #245c9c;
+      color: #ffffff;
+      font-weight: bold;
+    }
+
+    select {
+      min-height: 30px;
+      max-width: 110px;
+      padding: 3px 5px;
+      border: 1px solid #bbbbbb;
+      border-radius: 5px;
+      background: white;
+    }
+
+    .control {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    input[type="range"] {
+      width: 75px;
+      margin: 0;
+    }
+
+    #canvas-container {
+      flex: 1;
+      min-height: 0;
+      position: relative;
+      background: #ffffff;
+    }
+
+    #drawingCanvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      background: #ffffff;
+    }
+
+    @media (max-width: 480px) {
+      #toolbar {
+        gap: 4px;
+        padding: 4px;
+      }
+
+      button, select {
+        font-size: 13px;
+      }
+
+      button {
+        padding: 4px 8px;
+      }
+
+      .control {
+        gap: 3px;
+        font-size: 12px;
+      }
+
+      input[type="range"] {
+        width: 60px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div id="app">
+    <div id="toolbar">
+      <select id="tool" aria-label="Werkzeug auswählen">
+        <option value="pen">Stift</option>
+        <option value="eraser">Radierer</option>
+      </select>
+
+      <label class="control">
+        <span>Größe</span>
+        <input
+          id="size"
+          type="range"
+          min="1"
+          max="30"
+          value="3"
+          aria-label="Stift- und Radierergröße"
+        >
+      </label>
+
+      <button id="submit" type="button">Fertig</button>
+    </div>
+
+    <div id="canvas-container">
+      <canvas id="drawingCanvas"></canvas>
+    </div>
+  </div>
+
+  <script>
+    // Der Key kommt aus der URL: index.html?key=MEIN_KEY
+    // Er muss im LabVanced-Event "PostMessage Received" (Feld "Key")
+    // exakt gleich eingetragen sein. Ohne Key wird nichts gesendet.
+    const MESSAGE_KEY =
+      new URLSearchParams(window.location.search).get("key");
+
+    const canvas = document.getElementById("drawingCanvas");
+    const ctx = canvas.getContext("2d", { alpha: false });
+
+    const toolSelect = document.getElementById("tool");
+    const sizeInput = document.getElementById("size");
+
+    let drawing = false;
+    let lastX = 0;
+    let lastY = 0;
+
+    function resizeCanvas() {
+      const oldCanvas = document.createElement("canvas");
+      oldCanvas.width = canvas.width;
+      oldCanvas.height = canvas.height;
+
+      if (oldCanvas.width > 0 && oldCanvas.height > 0) {
+        oldCanvas.getContext("2d").drawImage(canvas, 0, 0);
+      }
+
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      canvas.width = Math.max(1, Math.round(rect.width * dpr));
+      canvas.height = Math.max(1, Math.round(rect.height * dpr));
+
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+
+      if (oldCanvas.width > 0 && oldCanvas.height > 0) {
+        ctx.drawImage(
+          oldCanvas,
+          0, 0, oldCanvas.width, oldCanvas.height,
+          0, 0, rect.width, rect.height
+        );
+      }
+
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    }
+
+    function getPosition(event) {
+      const rect = canvas.getBoundingClientRect();
+
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function startDrawing(event) {
+      event.preventDefault();
+      drawing = true;
+
+      const pos = getPosition(event);
+      lastX = pos.x;
+      lastY = pos.y;
+
+      canvas.setPointerCapture(event.pointerId);
+
+      ctx.beginPath();
+      ctx.fillStyle = toolSelect.value === "eraser"
+        ? "#ffffff"
+        : "#000000";
+
+      ctx.arc(
+        lastX,
+        lastY,
+        Number(sizeInput.value) / 2,
+        0,
+        Math.PI * 2
+      );
+
+      ctx.fill();
+    }
+
+    function draw(event) {
+      if (!drawing) return;
+      event.preventDefault();
+
+      const pos = getPosition(event);
+
+      ctx.beginPath();
+      ctx.moveTo(lastX, lastY);
+      ctx.lineTo(pos.x, pos.y);
+
+      ctx.lineWidth = Number(sizeInput.value);
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.strokeStyle = toolSelect.value === "eraser"
+        ? "#ffffff"
+        : "#000000";
+
+      ctx.stroke();
+
+      lastX = pos.x;
+      lastY = pos.y;
+    }
+
+    function stopDrawing(event) {
+      drawing = false;
+
+      if (event && canvas.hasPointerCapture(event.pointerId)) {
+        canvas.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    canvas.addEventListener("pointerdown", startDrawing);
+    canvas.addEventListener("pointermove", draw);
+    canvas.addEventListener("pointerup", stopDrawing);
+    canvas.addEventListener("pointercancel", stopDrawing);
+
+    canvas.addEventListener("lostpointercapture", () => {
+      drawing = false;
+    });
+
+    document.getElementById("submit").addEventListener("click", () => {
+      if (!MESSAGE_KEY) {
+        console.error("Fehler: In der URL fehlt ?key=...");
+        return;
+      }
+
+      try {
+        const message = {};
+        message[MESSAGE_KEY] = canvas.toDataURL("image/png");
+        window.parent.postMessage(message, "*");
+      } catch (error) {
+        console.error(error);
+      }
+    });
+
+    window.addEventListener("resize", resizeCanvas);
+
+    resizeCanvas();
+  </script>
+</body>
+</html>
