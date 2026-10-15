@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zeichnung anzeigen</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    #zeichnung {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: fill;
+      margin: 0;
+      padding: 0;
+      border: 0;
+    }
+  </style>
+</head>
+<body>
+  <img id="zeichnung" alt="Gespeicherte Zeichnung">
+
+  <script>
+    const image = document.getElementById("zeichnung");
+
+    function findPNG(value, depth = 0) {
+      if (depth > 10 || value == null) {
+        return null;
+      }
+
+      if (
+        typeof value === "string" &&
+        value.startsWith("data:image/png;base64,")
+      ) {
+        return value;
+      }
+
+      if (typeof value === "object") {
+        for (const key of Object.keys(value)) {
+          const result = findPNG(value[key], depth + 1);
+
+          if (result) {
+            return result;
+          }
+        }
+      }
+
+      return null;
+    }
+
+    window.addEventListener("message", function(event) {
+      const png = findPNG(event.data);
+
+      if (png) {
+        image.src = png;
+      }
+    });
+  </script>
+</body>
+</html>
